@@ -1,0 +1,5 @@
+build/
+ck2/
+venv/
+*.log
+__pycache__/
