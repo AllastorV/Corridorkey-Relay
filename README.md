@@ -9,6 +9,17 @@ the Edit, Fusion and Color pages, on Windows.
 > and their model. It is not affiliated with or endorsed by Corridor Digital. For the official, supported
 > plugin see [corridorkey.com](https://corridorkey.com).
 
+| Fire and smoke | Clean object edges |
+|---|---|
+| ![Explosion keyed with CorridorKey Relay](docs/explosion.gif) | ![Chicken roll keyed with CorridorKey Relay](docs/chicken.gif) |
+
+The line sweeps between the original green-screen plate (left) and the CorridorKey 2.0 result over a
+checkerboard (right). Both clips were keyed at 1280x720 with default settings, no hint, no clean-up.
+Footage: [explosion](https://commons.wikimedia.org/wiki/File:EXPLOSION_green_screen_(no_copyright)_-_the_chosen_one_(720p,_h264).webm)
+by *the chosen one*, CC BY 3.0;
+[chicken fillet roll](https://commons.wikimedia.org/wiki/File:8k_video_of_a_Chicken_fillet_roll_-_rotating_green_screen_alan_butler_VP9.webm)
+by Alan Butler, CC0. Both from Wikimedia Commons, downscaled and trimmed.
+
 CorridorKey 2.0 is a temporal video model: it looks at many frames at once. A per-frame live effect
 cannot run it, so this plugin works in two steps:
 
