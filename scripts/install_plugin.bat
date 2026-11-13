@@ -19,5 +19,5 @@ if errorlevel 8 (
   exit /b 1
 )
 echo Installed: %DST%
-echo Restart DaVinci Resolve. Effect: OpenFX ^> Keying ^> CorridorKey 2.0
+echo Restart DaVinci Resolve. Effect: OpenFX ^> Keying ^> CorridorKey Relay
 pause

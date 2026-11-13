@@ -332,7 +332,7 @@ double gpu_vram_gb() {
 OfxStatus describe(OfxImageEffectHandle effect) {
     OfxPropertySetHandle props;
     gEffect->getPropertySet(effect, &props);
-    gProp->propSetString(props, kOfxPropLabel, 0, "CorridorKey 2.0");
+    gProp->propSetString(props, kOfxPropLabel, 0, "CorridorKey Relay");
     gProp->propSetString(props, kOfxImageEffectPluginPropGrouping, 0, "Keying");
     gProp->propSetString(props, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextFilter);
     gProp->propSetString(props, kOfxImageEffectPropSupportedContexts, 1, kOfxImageEffectContextGeneral);

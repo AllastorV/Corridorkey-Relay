@@ -1,10 +1,13 @@
-# CorridorKey 2.0 OFX
+# CorridorKey Relay
 
-An unofficial OpenFX plugin that brings [CorridorKey 2.0](https://github.com/nikopueringer/CorridorKey2.0)
-into DaVinci Resolve (Edit, Fusion and Color pages) on Windows.
+A free, unofficial OpenFX plugin that relays your DaVinci Resolve clips to
+[CorridorKey 2.0](https://github.com/nikopueringer/CorridorKey2.0) and brings the keyed result back into
+the Edit, Fusion and Color pages, on Windows.
 
-> Not affiliated with Corridor Digital. For the official, supported plugin see
-> [corridorkey.com](https://corridorkey.com).
+> **Credit.** All of the keying is done by **CorridorKey 2.0**, made by Niko Pueringer and
+> [Corridor Digital](https://www.youtube.com/@CorridorCrew). This plugin only moves frames between Resolve
+> and their model. It is not affiliated with or endorsed by Corridor Digital. For the official, supported
+> plugin see [corridorkey.com](https://corridorkey.com).
 
 CorridorKey 2.0 is a temporal video model: it looks at many frames at once. A per-frame live effect
 cannot run it, so this plugin works in two steps:
@@ -32,9 +35,11 @@ cannot run it, so this plugin works in two steps:
 
    It goes to `%LOCALAPPDATA%\CorridorKey2OFX\runtime`. Use `-RuntimeDir <path>` for another folder and
    `-Latest` for the newest CorridorKey 2.0 commit.
+   The script clones the original repository, `github.com/nikopueringer/CorridorKey2.0`, and its weight
+   downloader; nothing from CorridorKey is mirrored here.
 2. Install the plugin: run `scripts\install_plugin.bat` (asks for administrator rights). It copies
    `CorridorKey2.ofx.bundle` to `C:\Program Files\Common Files\OFX\Plugins`.
-3. Restart Resolve. The effect is under **OpenFX > Keying > CorridorKey 2.0**.
+3. Restart Resolve. The effect is under **OpenFX > Keying > CorridorKey Relay**.
 
 ## Build from source
 
@@ -67,9 +72,9 @@ cache folder and `job.log` / `python.log` in each job folder help with problems.
 
 ## Licence
 
-The plugin code in this repository is MIT licensed (see `LICENSE`).
+The plugin code in this repository is MIT licensed (see `LICENSE`). It is and stays free.
 
-CorridorKey 2.0 itself is **not** included. `install_runtime.ps1` downloads it from its own repository; it is
+CorridorKey 2.0 itself is **not** included and is not covered by the MIT licence. `install_runtime.ps1` downloads it from its own repository; it is
 under the CorridorKey licence (a variation of CC BY-NC-SA 4.0 with additional terms, see its `LICENSE`).
 In short, per its README: output may be used commercially; organisations with more than US $20 million
 annual revenue must buy a seat of the official plugin per user. The foundation models it downloads have

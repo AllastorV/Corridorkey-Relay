@@ -430,9 +430,11 @@ def owner_rect(owner):
 
         user32 = ctypes.windll.user32
         user32.IsWindow.argtypes = [wintypes.HWND]
+        user32.IsIconic.argtypes = [wintypes.HWND]
         user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
         rc = wintypes.RECT()
-        if owner and user32.IsWindow(owner) and user32.GetWindowRect(owner, ctypes.byref(rc)):
+        if owner and user32.IsWindow(owner) and not user32.IsIconic(owner) and \
+                user32.GetWindowRect(owner, ctypes.byref(rc)):
             return rc.left, rc.top, rc.right, rc.bottom
     except Exception:
         pass
@@ -473,7 +475,7 @@ def progress_window(job: Job):
         root = tk.Tk()
     except Exception:
         return
-    root.title("CorridorKey 2.0")
+    root.title("CorridorKey Relay")
     icon = tk.PhotoImage(width=32, height=32)
     for y in range(32):
         row = [ACCENT if x + y < 31 else ("#9a9aa2" if (x // 4 + y // 4) % 2 else "#5a5a62") for x in range(32)]
