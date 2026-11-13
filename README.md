@@ -2,7 +2,7 @@
 
 [![Download Setup.exe](https://img.shields.io/badge/Download-Setup.exe-E64B3D?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/AllastorV/Corridorkey-Relay/releases/latest/download/CorridorKey-Relay-1.0.0-Setup.exe)
 [![Source](https://img.shields.io/badge/Source-GitHub-24292F?style=for-the-badge&logo=github&logoColor=white)](https://github.com/AllastorV/Corridorkey-Relay)
-[![CorridorKey 2.0](https://img.shields.io/badge/Powered%20by-CorridorKey%202.0-2B2B31?style=for-the-badge)](https://github.com/nikopueringer/CorridorKey2.0)
+[![CorridorKey 2.0](https://img.shields.io/badge/Powered%20by-CorridorKey%202.0-FFF203?style=for-the-badge)](https://github.com/nikopueringer/CorridorKey2.0)
 [![Licence](https://img.shields.io/badge/Licence-CorridorKey%20(CC%20BY--NC--SA%204.0%20variant)-555?style=for-the-badge)](LICENSE)
 
 A free, unofficial OpenFX plugin that relays your DaVinci Resolve clips to
