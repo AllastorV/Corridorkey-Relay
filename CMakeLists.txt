@@ -21,9 +21,7 @@ set_target_properties(corridorkey2_ofx PROPERTIES
   OUTPUT_NAME CorridorKey2 SUFFIX .ofx
   RUNTIME_OUTPUT_DIRECTORY ${BUNDLE_DIR}/Contents/Win64
   LIBRARY_OUTPUT_DIRECTORY ${BUNDLE_DIR}/Contents/Win64)
-add_custom_command(TARGET corridorkey2_ofx POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_DIR}/Contents/Resources
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/server/ck2_job.py ${BUNDLE_DIR}/Contents/Resources/ck2_job.py)
+configure_file(server/ck2_job.py ${BUNDLE_DIR}/Contents/Resources/ck2_job.py COPYONLY)
 if(MSVC)
   target_link_options(corridorkey2_ofx PRIVATE /PDBALTPATH:CorridorKey2.pdb)
 endif()

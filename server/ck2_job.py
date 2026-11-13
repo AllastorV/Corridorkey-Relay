@@ -318,10 +318,124 @@ def run(job: Job):
         shutil.rmtree(work, ignore_errors=True)
 
 
+STAGE_SPANS = {"starting": (0.0, 0.0), "preparing": (0.0, 0.05), "queued": (0.05, 0.05),
+               "loading": (0.05, 0.1), "keying": (0.1, 0.95), "finishing": (0.95, 1.0), "done": (1.0, 1.0)}
+STAGE_TEXT = {"starting": "Starting", "preparing": "Reading frames", "queued": "Waiting for another CorridorKey job",
+              "loading": "Loading the model", "keying": "Keying", "finishing": "Writing the result",
+              "done": "Done"}
+
+
+def progress_text(state):
+    stage = state.get("stage") or "starting"
+    if stage == "error":
+        return f"Error: {state.get('error')}", None
+    lo, hi = STAGE_SPANS.get(stage, (0.0, 0.0))
+    total = max(int(state.get("total") or 0), 1)
+    done = min(max(int(state.get("done") or 0), 0), total)
+    text = STAGE_TEXT.get(stage, stage)
+    if stage in ("preparing", "keying", "finishing"):
+        text += f" {done}/{total} frames"
+    return text, lo + (hi - lo) * done / total
+
+
+def active_work_area():
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class MonitorInfo(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT),
+                        ("dwFlags", wintypes.DWORD)]
+
+        user32 = ctypes.windll.user32
+        user32.MonitorFromWindow.restype = wintypes.HMONITOR
+        user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+        user32.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, ctypes.POINTER(MonitorInfo)]
+        info = MonitorInfo(cbSize=ctypes.sizeof(MonitorInfo))
+        monitor = user32.MonitorFromWindow(user32.GetForegroundWindow(), 1)
+        if monitor and user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            r = info.rcWork
+            return r.left, r.top, r.right, r.bottom
+    except Exception:
+        pass
+    return None
+
+
+def progress_window(job: Job):
+    area = active_work_area()
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+
+        root = tk.Tk()
+    except Exception:
+        return
+    spec = job.spec
+    root.title("CorridorKey 2.0")
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    frame = ttk.Frame(root, padding=12)
+    frame.pack(fill="both", expand=True)
+    ttk.Label(frame, text=f"Keying {spec['count']} frames at {spec['width']}x{spec['height']}").pack(anchor="w")
+    label = ttk.Label(frame, text="Starting", width=48)
+    label.pack(anchor="w", pady=(6, 4))
+    bar = ttk.Progressbar(frame, length=320, maximum=1000, mode="determinate")
+    bar.pack(fill="x")
+    button = ttk.Button(frame, text="Cancel")
+    button.pack(anchor="e", pady=(8, 0))
+
+    def cancel():
+        (job.folder / "cancel").write_text("1", encoding="utf-8")
+        button.state(["disabled"])
+        label.configure(text="Cancelling...")
+
+    button.configure(command=cancel)
+    root.protocol("WM_DELETE_WINDOW", root.iconify)
+    root.update_idletasks()
+    left, top, right, bottom = area or (0, 0, root.winfo_screenwidth(), root.winfo_screenheight() - 48)
+    x = right - root.winfo_width() - 24
+    y = bottom - root.winfo_height() - 24
+    root.geometry(f"+{x}+{y}")
+
+    def tick():
+        with job.lock:
+            state = dict(job.state)
+        text, frac = progress_text(state)
+        if "disabled" not in button.state() or state.get("stage") == "error":
+            label.configure(text=text)
+        if frac is not None:
+            bar["value"] = int(frac * 1000)
+        if state.get("stage") == "done":
+            root.after(800, root.destroy)
+        elif state.get("stage") == "error":
+            button.configure(text="Close", command=root.destroy)
+            button.state(["!disabled"])
+            root.after(8000, root.destroy)
+        else:
+            root.after(250, tick)
+
+    try:
+        tick()
+        root.mainloop()
+    finally:
+        import gc
+
+        root = frame = label = bar = button = None
+        gc.collect()
+
+
 def main():
     folder = Path(sys.argv[1])
     job = Job(folder)
     (folder / "pid").write_text(str(os.getpid()), encoding="utf-8")
+    window = threading.Thread(target=progress_window, args=(job,), daemon=True)
+    window.start()
+    code = execute(job)
+    window.join(timeout=10)
+    return code
+
+
+def execute(job: Job):
     try:
         run(job)
         return 0

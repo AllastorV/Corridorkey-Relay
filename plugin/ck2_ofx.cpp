@@ -816,9 +816,8 @@ std::string status_text(OfxImageEffectHandle effect, OfxTime t) {
     if (p.stage == "queued") return "Queued: waiting for another CorridorKey job to finish.";
     if (!exists(dir + L"\\collected")) return "Waiting to read frames (play or scrub one frame).";
     if (!process_alive(dir) && p.stage != "done") return "Stopped. Press Key Clip to start again.";
-    std::string stage = p.stage.empty() ? "starting" : p.stage;
-    return "Keying (" + stage + ") " + std::to_string(p.done) + "/" + std::to_string(std::max(p.total, j.count)) +
-           " at " + size + "...";
+    return "Keying " + std::to_string(p.done) + "/" + std::to_string(std::max(p.total, j.count)) +
+           " - press Refresh";
 }
 
 void refresh(OfxImageEffectHandle effect, OfxTime t, bool bump) {

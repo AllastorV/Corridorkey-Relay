@@ -10,7 +10,8 @@ CorridorKey 2.0 is a temporal video model: it looks at many frames at once. A pe
 cannot run it, so this plugin works in two steps:
 
 1. **Key Clip** reads the clip's frames once and starts CorridorKey 2.0 in the background (Python +
-   PyTorch, your NVIDIA GPU). A progress bar is drawn over the picture while it works.
+   PyTorch, your NVIDIA GPU). A small progress window opens in the corner of Resolve's monitor with the
+   current stage, a progress bar and a Cancel button; it closes when the job ends.
 2. When it is done, press **Refresh**. The keyed result plays from a disk cache. View, despill and matte
    levels are applied live, without keying again.
 
@@ -80,7 +81,10 @@ their own licences (C-RADIOv4: NVIDIA Open Model License, MoGe: MIT, RVM: Apache
 - **Reference frame hint**: the hint is taken at the reference frame and keyed forward to the end and
   backward to the start, so the best-looking frame can guide the whole shot.
 - **Hint input**: in general context (Color page node, Fusion) the effect has a second input. Connect a
-  matte (Magic Mask, Qualifier, window, a roto) and set *Hint from* to *Hint input*.
+  matte (Magic Mask, Qualifier, window, a roto) and set *Hint from* to *Hint input*. On the Color page,
+  connect both the RGB and the key output of the matte node to the effect's second input pair: Resolve
+  treats the Hint input as unconnected when only the key link is made. Use *Hint channel: Alpha* for a key
+  link, *Luminance* for a black-and-white image.
 - **Several shots**: press Key Clip on as many clips as you like. Jobs wait in a queue and use the GPU one
   at a time.
 - **Out of GPU memory**: the job retries on its own with Low VRAM and a smaller temporal window; the Status

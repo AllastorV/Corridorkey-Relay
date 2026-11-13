@@ -133,6 +133,19 @@ class PureFunctions(unittest.TestCase):
         self.assertEqual(f({"mode": "first", "reference": 99}, 10), {9})
         self.assertEqual(f({"mode": "first", "reference": -5}, 10), {0})
 
+    def test_progress_text_is_monotonic_across_stages(self):
+        f = self.m.progress_text
+        steps = [("starting", 0, 30), ("preparing", 15, 30), ("preparing", 30, 30), ("queued", 0, 30),
+                 ("loading", 0, 30), ("keying", 0, 30), ("keying", 29, 30), ("finishing", 30, 30),
+                 ("done", 30, 30)]
+        fracs = [f({"stage": s, "done": d, "total": t})[1] for s, d, t in steps]
+        self.assertEqual(fracs, sorted(fracs))
+        self.assertEqual(fracs[0], 0.0)
+        self.assertEqual(fracs[-1], 1.0)
+        self.assertEqual(f({"stage": "keying", "done": 12, "total": 30})[0], "Keying 12/30 frames")
+        self.assertEqual(f({"stage": "keying", "done": 99, "total": 0})[1], 0.95)
+        self.assertEqual(f({"stage": "error", "error": "Cancelled."}), ("Error: Cancelled.", None))
+
     def test_is_oom_follows_cause_chain_and_survives_cycles(self):
         inner = RuntimeError("CUDA out of memory")
         outer = ValueError("wrapped")
