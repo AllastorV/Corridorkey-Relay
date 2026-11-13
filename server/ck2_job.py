@@ -92,14 +92,14 @@ def stage_frames(job: Job, frames_dir: Path, hint_dir: Path):
     params = [cv2.IMWRITE_EXR_TYPE, cv2.IMWRITE_EXR_TYPE_HALF]
     for i in range(count):
         job.check()
-        rgb = read_raw(job.folder / "in" / f"{i:05d}.raw", w, h, 3)
+        rgb = np.nan_to_num(read_raw(job.folder / "in" / f"{i:05d}.raw", w, h, 3), nan=0.0, posinf=65504.0, neginf=0.0)
         cv2.imwrite(str(frames_dir / f"{i:05d}.exr"), cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), params)
         if i in needed:
             if source == "input":
                 path = job.folder / "in" / f"hint_{i:05d}.raw"
                 if not path.exists():
                     raise RuntimeError(f"Hint input frame {i} is missing. Connect a matte to the Hint input.")
-                a = np.clip(read_raw(path, w, h, 1)[..., 0], 0.0, 1.0)
+                a = np.clip(np.nan_to_num(read_raw(path, w, h, 1)[..., 0]), 0.0, 1.0)
             else:
                 display = np.clip(srgb_encode(rgb), 0, 1) if linear else np.clip(rgb, 0, 1)
                 a = chroma_alpha(display, hint.get("color", [0, 1, 0]), float(hint.get("similarity", 0.12)),

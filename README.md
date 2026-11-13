@@ -103,3 +103,16 @@ $rt = "$env:LOCALAPPDATA\CorridorKey2OFX\runtime"
 
 Arguments of `make_test_job.py`: video, job folder, scale (1/2/4), hint mode (none/first/video), reference
 frame.
+
+## Tests
+
+```powershell
+build.bat; build\test_plugin.exe
+& "$env:LOCALAPPDATA\CorridorKey2OFX\runtime\venv\Scripts\python.exe" -m unittest tests.test_job
+$env:CK2_GPU_TESTS = "1"; & "$env:LOCALAPPDATA\CorridorKey2OFX\runtime\venv\Scripts\python.exe" -m unittest tests.test_job.RealModel
+```
+
+`test_plugin.exe` drives the plugin through a fake OFX host (half-float round trip of all 65536 values,
+orientation, render scale, partial render windows, offset origins, NaN/Inf input, 8-thread renders,
+concurrent frame collection, broken caches). `test_job` checks the keying job with a fake runtime
+(two-pass reference frames, OOM retries, GPU queue, cancel); `RealModel` runs the real model on the GPU.

@@ -157,9 +157,16 @@ std::string json_escape(const std::string& s) {
 }
 
 std::string json_raw(const std::string& text, const std::string& key) {
-    size_t k = text.find("\"" + key + "\"");
-    if (k == std::string::npos) return "";
-    size_t c = text.find(':', k);
+    const std::string quoted = "\"" + key + "\"";
+    size_t c = std::string::npos;
+    for (size_t k = text.find(quoted); k != std::string::npos; k = text.find(quoted, k + 1)) {
+        static const char space[] = {32, 9, 13, 10, 0};
+        size_t n = text.find_first_not_of(space, k + quoted.size());
+        if (n != std::string::npos && text[n] == ':') {
+            c = n;
+            break;
+        }
+    }
     if (c == std::string::npos) return "";
     size_t i = c + 1;
     while (i < text.size() && text[i] == ' ') ++i;

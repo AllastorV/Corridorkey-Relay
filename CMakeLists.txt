@@ -27,3 +27,7 @@ add_custom_command(TARGET corridorkey2_ofx POST_BUILD
 if(MSVC)
   target_link_options(corridorkey2_ofx PRIVATE /PDBALTPATH:CorridorKey2.pdb)
 endif()
+
+add_executable(test_plugin tests/test_plugin.cpp)
+target_include_directories(test_plugin PRIVATE ${openfx_SOURCE_DIR}/include)
+target_compile_definitions(test_plugin PRIVATE UNICODE _UNICODE)
