@@ -322,6 +322,9 @@ OfxStatus describe_in_context(OfxImageEffectHandle effect, OfxPropertySetHandle 
     define_button(params, "refresh", "Refresh", "Updates the status and shows the result once keying is done.",
                   "processGroup");
     define_button(params, "cancel", "Cancel", "Stops the running keying.", "processGroup");
+    define_button(params, "clearCache", "Clear Cache",
+                  "Moves this clip's keyed frames to the Recycle Bin. The clip shows the source until keyed again.",
+                  "processGroup");
     define_button(params, "openCache", "Open Cache Folder", "Opens the folder that holds the keyed frames.",
                   "processGroup");
     OfxPropertySetHandle sp;
@@ -919,6 +922,28 @@ OfxStatus instance_changed(OfxImageEffectHandle effect, OfxPropertySetHandle in)
         refresh(effect, t, true);
         return kOfxStatOK;
     }
+    if (!std::strcmp(name, "clearCache")) {
+        std::string id = get_string(effect, "jobId");
+        if (id.empty()) return kOfxStatOK;
+        if (gMessage && gMessage->message(effect, kOfxMessageQuestion, nullptr,
+                                          "Move this clip's CorridorKey cache to the Recycle Bin?") != kOfxStatReplyYes)
+            return kOfxStatOK;
+        std::wstring dir = job_dir(id);
+        if (process_alive(dir)) cancel_job(dir);
+        std::wstring from = dir;
+        from.push_back(L'\0');
+        SHFILEOPSTRUCTW op{};
+        op.wFunc = FO_DELETE;
+        op.pFrom = from.c_str();
+        op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+        if (SHFileOperationW(&op) != 0 || op.fAnyOperationsAborted) {
+            post(effect, kOfxMessageError, "CorridorKey 2.0: could not move the cache: " + narrow(dir));
+            return kOfxStatFailed;
+        }
+        set_string(effect, "jobId", "");
+        refresh(effect, t, true);
+        return kOfxStatOK;
+    }
     if (!std::strcmp(name, "setReference")) {
         Range r = source_range(effect);
         int index = std::max(0, static_cast<int>(std::floor(t - r.start + 0.5)));
@@ -1114,8 +1139,12 @@ OfxStatus frames_needed(OfxImageEffectHandle effect, OfxPropertySetHandle in, Of
     return kOfxStatOK;
 }
 
-OfxStatus clip_preferences(OfxPropertySetHandle out) {
-    gProp->propSetString(out, kOfxImageEffectPropPreMultiplication, 0, kOfxImagePreMultiplied);
+OfxStatus clip_preferences(OfxImageEffectHandle effect, OfxPropertySetHandle out) {
+    int view = std::clamp(get_int(effect, "view", 0.0), 0, 5);
+    const char* premult = view == 0 || view == 5 ? kOfxImagePreMultiplied
+                          : view == 1           ? kOfxImageUnPreMultiplied
+                                                : kOfxImageOpaque;
+    gProp->propSetString(out, kOfxImageEffectPropPreMultiplication, 0, premult);
     gProp->propSetInt(out, kOfxImageEffectFrameVarying, 0, 1);
     return kOfxStatOK;
 }
@@ -1147,7 +1176,7 @@ OfxStatus dispatch(const char* action, OfxImageEffectHandle effect, OfxPropertyS
     if (!std::strcmp(action, kOfxImageEffectActionRender)) return render(effect, in);
     if (!std::strcmp(action, kOfxActionInstanceChanged)) return instance_changed(effect, in);
     if (!std::strcmp(action, kOfxImageEffectActionGetFramesNeeded)) return frames_needed(effect, in, out);
-    if (!std::strcmp(action, kOfxImageEffectActionGetClipPreferences)) return clip_preferences(out);
+    if (!std::strcmp(action, kOfxImageEffectActionGetClipPreferences)) return clip_preferences(effect, out);
     return kOfxStatReplyDefault;
 }
 
