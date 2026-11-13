@@ -9,9 +9,13 @@ the Edit, Fusion and Color pages, on Windows.
 > and their model. It is not affiliated with or endorsed by Corridor Digital. For the official, supported
 > plugin see [corridorkey.com](https://corridorkey.com).
 
-| Fire and smoke | Clean object edges |
-|---|---|
-| ![Explosion keyed with CorridorKey Relay](docs/explosion.gif) | ![Chicken roll keyed with CorridorKey Relay](docs/chicken.gif) |
+**Fire and smoke**
+
+![Explosion keyed with CorridorKey Relay](docs/explosion.gif)
+
+**Clean object edges**
+
+![Chicken roll keyed with CorridorKey Relay](docs/chicken.gif)
 
 The line sweeps between the original green-screen plate (left) and the CorridorKey 2.0 result over a
 checkerboard (right). Both clips were keyed at 1280x720 with default settings, no hint, no clean-up.
@@ -74,6 +78,8 @@ Setup EXE: build first, then compile `installer\CorridorKeyRelay.iss` with Inno 
 (`ISCC.exe installer\CorridorKeyRelay.iss`). Output: `build\dist\CorridorKey-Relay-<version>-Setup.exe`.
 
 ## Controls
+
+![CorridorKey Relay in the Resolve Inspector](docs/inspector.png)
 
 | Group | Control | When it applies |
 |---|---|---|
