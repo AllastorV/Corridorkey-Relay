@@ -27,6 +27,14 @@ cannot run it, so this plugin works in two steps:
 
 ## Install
 
+**One click:** download `CorridorKey-Relay-<version>-Setup.exe` from the Releases page and run it (close
+Resolve first). It installs the plugin and, if the task is ticked, downloads CorridorKey 2.0 from its
+official repository (needs Git and Python 3.12; the setup tells you if they are missing). Uninstall from
+Windows Settings > Apps; the downloaded CorridorKey 2.0 runtime in `%LOCALAPPDATA%\CorridorKey2OFX` is
+kept so a reinstall does not download it again.
+
+**Manual:**
+
 1. Install the runtime (CorridorKey 2.0 code at a pinned commit, PyTorch cu128, weights from Hugging Face):
 
    ```powershell
@@ -50,6 +58,9 @@ build.bat
 ```
 
 The OpenFX headers are downloaded by CMake. Output: `build\CorridorKey2.ofx.bundle`.
+
+Setup EXE: build first, then compile `installer\CorridorKeyRelay.iss` with Inno Setup 6
+(`ISCC.exe installer\CorridorKeyRelay.iss`). Output: `build\dist\CorridorKey-Relay-<version>-Setup.exe`.
 
 ## Controls
 
