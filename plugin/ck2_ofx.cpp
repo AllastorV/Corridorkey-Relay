@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <objbase.h>
 #include <shellapi.h>
+#include <dxgi.h>
 
 #include <algorithm>
 #include <cmath>
@@ -22,13 +23,15 @@
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "dxgi.lib")
 
 namespace {
 
 constexpr const char* kPluginId = "com.alpcavas.corridorkey2";
 constexpr const char* kResolutionLabels[] = {"Full", "Half", "Quarter"};
 constexpr int kScales[] = {1, 2, 4};
-constexpr const char* kMemoryLabels[] = {"Auto (free GPU memory)", "Manual"};
+constexpr const char* kMemoryLabels[] = {"Auto (free GPU memory)", "Manual", "VRAM limit"};
+constexpr double kMinVramGb = 3.5;
 constexpr const char* kWindowLabels[] = {"1", "2", "4", "8", "24", "48", "80"};
 constexpr int kWindows[] = {1, 2, 4, 8, 24, 48, 80};
 constexpr const char* kHintLabels[] = {"None (model picks the subject)", "Reference frame", "Every frame"};
@@ -270,10 +273,14 @@ void define_choice(OfxParamSetHandle params, const char* name, const char* label
     gProp->propSetInt(p, kOfxParamPropAnimates, 0, 0);
 }
 
-void define_button(OfxParamSetHandle params, const char* name, const char* label, const char* hint, const char* parent) {
+void define_button(OfxParamSetHandle params, const char* name, const char* label, const char* hint, const char* parent,
+                   int pad = 0) {
     OfxPropertySetHandle p;
     gParam->paramDefine(params, kOfxParamTypePushButton, name, &p);
-    place(p, label, hint, parent);
+    std::string side;
+    for (int i = 0; i < pad; ++i) side += "\xC2\xA0";
+    std::string text = side + label + side;
+    place(p, text.c_str(), hint, parent);
 }
 
 void define_hidden_string(OfxParamSetHandle params, const char* name) {
@@ -283,6 +290,43 @@ void define_hidden_string(OfxParamSetHandle params, const char* name) {
     gProp->propSetString(p, kOfxParamPropDefault, 0, "");
     gProp->propSetInt(p, kOfxParamPropSecret, 0, 1);
     gProp->propSetInt(p, kOfxParamPropAnimates, 0, 0);
+}
+
+HWND host_window() {
+    struct Best {
+        HWND hwnd = nullptr;
+        long long area = 0;
+    } best;
+    EnumWindows(
+        [](HWND h, LPARAM lp) -> BOOL {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(h, &pid);
+            RECT rc;
+            if (pid != GetCurrentProcessId() || !IsWindowVisible(h) || GetWindow(h, GW_OWNER) || !GetWindowRect(h, &rc))
+                return TRUE;
+            auto* b = reinterpret_cast<Best*>(lp);
+            long long area = static_cast<long long>(rc.right - rc.left) * (rc.bottom - rc.top);
+            if (area > b->area) b->hwnd = h, b->area = area;
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&best));
+    return best.hwnd;
+}
+
+double gpu_vram_gb() {
+    IDXGIFactory1* factory = nullptr;
+    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory)))) return 0.0;
+    SIZE_T best = 0;
+    IDXGIAdapter1* adapter = nullptr;
+    for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+        DXGI_ADAPTER_DESC1 desc{};
+        if (SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+            desc.VendorId == 0x10DE)
+            best = std::max(best, desc.DedicatedVideoMemory);
+        adapter->Release();
+    }
+    factory->Release();
+    return static_cast<double>(best) / (1024.0 * 1024.0 * 1024.0);
 }
 
 OfxStatus describe(OfxImageEffectHandle effect) {
@@ -325,13 +369,13 @@ OfxStatus describe_in_context(OfxImageEffectHandle effect, OfxPropertySetHandle 
     define_button(params, "keyClip", "Key Clip",
                   "Keys the whole clip with CorridorKey 2.0 in the background. The frames are read once; the result "
                   "plays from the cache.",
-                  "processGroup");
+                  "processGroup", 9);
     define_button(params, "refresh", "Refresh", "Updates the status and shows the result once keying is done.",
-                  "processGroup");
-    define_button(params, "cancel", "Cancel", "Stops the running keying.", "processGroup");
+                  "processGroup", 10);
+    define_button(params, "cancel", "Cancel", "Stops the running keying.", "processGroup", 10);
     define_button(params, "clearCache", "Clear Cache",
                   "Moves this clip's keyed frames to the Recycle Bin. The clip shows the source until keyed again.",
-                  "processGroup");
+                  "processGroup", 6);
     define_button(params, "openCache", "Open Cache Folder", "Opens the folder that holds the keyed frames.",
                   "processGroup");
     OfxPropertySetHandle sp;
@@ -355,8 +399,16 @@ OfxStatus describe_in_context(OfxImageEffectHandle effect, OfxPropertySetHandle 
                 "controlsGroup");
     define_choice(params, "resolution", "Resolution", kResolutionLabels, 3, 0,
                   "Size the model works at. Half and Quarter are faster and need less GPU memory.", "controlsGroup");
-    define_choice(params, "memory", "GPU memory", kMemoryLabels, 2, 0,
-                  "Auto picks the temporal window and low-VRAM mode from free GPU memory.", "controlsGroup");
+    define_choice(params, "memory", "GPU memory", kMemoryLabels, 3, 0,
+                  "Auto picks the temporal window and low-VRAM mode from free GPU memory. VRAM limit does the same "
+                  "within the VRAM limit below and never uses more.",
+                  "controlsGroup");
+    double card = gpu_vram_gb();
+    double top = std::max(kMinVramGb, card > 0 ? std::floor(card * 2.0) / 2.0 : 24.0);
+    define_double(params, "vramLimit", "VRAM limit (GB)", top, kMinVramGb, top,
+                  "VRAM limit mode only: most GPU memory the keyer may use. Lower leaves room for Resolve; the "
+                  "minimum is what CorridorKey 2.0 needs at 1080p.",
+                  "controlsGroup", false);
     define_choice(params, "window", "Temporal window", kWindowLabels, 7, 3,
                   "Manual only: frames the model sees at once. Larger is steadier and needs more GPU memory.",
                   "controlsGroup");
@@ -459,14 +511,16 @@ std::string model_settings(OfxImageEffectHandle effect, OfxTime t) {
     int source = std::clamp(get_int(effect, "hintSource", t), 0, 1);
     char buf[1024];
     std::snprintf(buf, sizeof buf,
-                  "\"linear\": %s, \"scale\": %d, \"memory\": {\"auto\": %s, \"chunk\": %d, \"low_vram\": %s}, "
+                  "\"linear\": %s, \"scale\": %d, "
+                  "\"memory\": {\"auto\": %s, \"chunk\": %d, \"low_vram\": %s, \"limit_gb\": %.2f}, "
                   "\"hint\": {\"mode\": \"%s\", \"source\": \"%s\", \"channel\": %d, \"reference\": %d, "
                   "\"color\": [%.4f, %.4f, %.4f], \"similarity\": %.4f, "
                   "\"softness\": %.4f, \"quality\": %.4f}, \"carry_hint\": %s, \"carry_quality\": %.4f",
                   get_int(effect, "linearInput", t) ? "true" : "false",
-                  kScales[std::clamp(get_int(effect, "resolution", t), 0, 2)], memory == 0 ? "true" : "false",
+                  kScales[std::clamp(get_int(effect, "resolution", t), 0, 2)], memory != 1 ? "true" : "false",
                   kWindows[std::clamp(get_int(effect, "window", t), 0, 6)],
-                  get_int(effect, "lowVram", t) ? "true" : "false", kHintModes[hint], kHintSources[source],
+                  get_int(effect, "lowVram", t) ? "true" : "false",
+                  memory == 2 ? std::max(kMinVramGb, get_double(effect, "vramLimit", t)) : 0.0, kHintModes[hint], kHintSources[source],
                   get_int(effect, "hintChannel", t), std::max(0, get_int(effect, "reference", t)), rgb[0], rgb[1], rgb[2],
                   get_double(effect, "similarity", t), get_double(effect, "softness", t),
                   get_double(effect, "hintQuality", t), get_int(effect, "carryHint", t) ? "true" : "false",
@@ -884,8 +938,9 @@ OfxStatus key_clip(OfxImageEffectHandle effect, OfxTime t) {
     char head[512];
     std::snprintf(head, sizeof head,
                   "{\"width\": %d, \"height\": %d, \"full_w\": %d, \"full_h\": %d, \"x0\": %d, \"y0\": %d, "
-                  "\"count\": %d, \"start\": %.6f, \"fps\": %.6f, ",
-                  w, h, full_w, full_h, x0, y0, count, r.start, frame_rate(effect));
+                  "\"count\": %d, \"start\": %.6f, \"fps\": %.6f, \"owner\": %llu, ",
+                  w, h, full_w, full_h, x0, y0, count, r.start, frame_rate(effect),
+                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(host_window())));
     std::string body = std::string(head) + settings + ", \"settings\": \"" + json_escape(settings) + "\"}";
     if (!write_text(dir + L"\\job.json", body)) {
         post(effect, kOfxMessageError, "CorridorKey 2.0: cannot write to " + narrow(dir));

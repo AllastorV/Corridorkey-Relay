@@ -51,7 +51,7 @@ The OpenFX headers are downloaded by CMake. Output: `build\CorridorKey2.ofx.bund
 | Group | Control | When it applies |
 |---|---|---|
 | Process | Key Clip, Refresh, Cancel, Open Cache Folder, Clear Cache (to Recycle Bin), Status | |
-| Controls | Linear input, Resolution (Full/Half/Quarter), GPU memory (Auto/Manual), Temporal window, Low VRAM | next Key Clip |
+| Controls | Linear input, Resolution (Full/Half/Quarter), GPU memory (Auto/Manual/VRAM limit), VRAM limit (GB), Temporal window, Low VRAM | next Key Clip |
 | Hint | Alpha hint (None / Reference frame / Every frame), Hint from (Chroma key / Hint input), Hint channel, Reference frame + Set Reference to Current Frame, Screen colour, Similarity, Softness, Hint quality, Carry hint, Carry quality | next Key Clip |
 | Output | View (Cutout premultiplied / straight, Alpha, Foreground, Checker, Source), Clip black, Clip white | live |
 | Despill | Screen (green/blue), Algorithm (Average/Max/Min), Despill | live |
@@ -87,6 +87,9 @@ their own licences (C-RADIOv4: NVIDIA Open Model License, MoGe: MIT, RVM: Apache
   link, *Luminance* for a black-and-white image.
 - **Several shots**: press Key Clip on as many clips as you like. Jobs wait in a queue and use the GPU one
   at a time.
+- **VRAM limit**: set *GPU memory* to *VRAM limit* and move the slider (3.5 GB up to your card's memory) to
+  cap how much GPU memory the keyer may use in total, CUDA included, for example to leave room for Resolve. The keyer picks the
+  largest temporal window that fits and never goes over the limit.
 - **Out of GPU memory**: the job retries on its own with Low VRAM and a smaller temporal window; the Status
   says so.
 - **Trimmed or changed clips**: the Status tells you when the clip range or a keying setting changed after

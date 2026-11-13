@@ -477,6 +477,25 @@ void test_describe_contexts() {
     CHECK(prm(g.get(), "status").s.find("Not keyed") != std::string::npos, "initial status");
 }
 
+void test_vram_limit_settings() {
+    auto e = make_effect();
+    Param& v = prm(e.get(), "vramLimit");
+    CHECK(v.d[0] >= kMinVramGb, "vram limit default >= minimum");
+    CHECK(model_settings(reinterpret_cast<OfxImageEffectHandle>(e.get()), 0).find("\"auto\": true") != std::string::npos, "auto by default");
+    CHECK(model_settings(reinterpret_cast<OfxImageEffectHandle>(e.get()), 0).find("\"limit_gb\": 0.00") != std::string::npos, "no limit in auto");
+    prm(e.get(), "memory").i = 2;
+    v.d[0] = 4.5;
+    std::string s = model_settings(reinterpret_cast<OfxImageEffectHandle>(e.get()), 0);
+    CHECK(s.find("\"auto\": true") != std::string::npos && s.find("\"limit_gb\": 4.50") != std::string::npos,
+          "vram limit mode: " + s);
+    v.d[0] = 1.0;
+    CHECK(model_settings(reinterpret_cast<OfxImageEffectHandle>(e.get()), 0).find("\"limit_gb\": 3.50") != std::string::npos, "limit clamped to minimum");
+    prm(e.get(), "memory").i = 1;
+    s = model_settings(reinterpret_cast<OfxImageEffectHandle>(e.get()), 0);
+    CHECK(s.find("\"auto\": false") != std::string::npos && s.find("\"limit_gb\": 0.00") != std::string::npos,
+          "manual has no limit");
+}
+
 void test_collect_orientation_and_scale() {
     auto e = make_effect();
     source_gradient(e.get());
@@ -789,6 +808,7 @@ int main() {
     test_half_exhaustive();
     test_despill();
     test_describe_contexts();
+    test_vram_limit_settings();
     test_collect_orientation_and_scale();
     test_nan_source_and_odd_size();
     test_render_views_orientation_scale();

@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
@@ -15,6 +16,9 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 import cv2
 import numpy as np
 
+EXR_COMPRESSION = cv2.IMWRITE_EXR_COMPRESSION_PIZ
+WORKERS = max(1, min(4, (os.cpu_count() or 2) // 2))
+CUDA_CONTEXT_GB = 0.4
 CK2 = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parents[1]) / "ck2"
 sys.path.insert(0, str(CK2))
 
@@ -89,7 +93,7 @@ def stage_frames(job: Job, frames_dir: Path, hint_dir: Path):
     source = hint.get("source", "chroma")
     frames_dir.mkdir(parents=True, exist_ok=True)
     hint_dir.mkdir(parents=True, exist_ok=True)
-    params = [cv2.IMWRITE_EXR_TYPE, cv2.IMWRITE_EXR_TYPE_HALF]
+    params = [cv2.IMWRITE_EXR_TYPE, cv2.IMWRITE_EXR_TYPE_HALF, cv2.IMWRITE_EXR_COMPRESSION, EXR_COMPRESSION]
     for i in range(count):
         job.check()
         rgb = np.nan_to_num(read_raw(job.folder / "in" / f"{i:05d}.raw", w, h, 3), nan=0.0, posinf=65504.0, neginf=0.0)
@@ -173,6 +177,30 @@ def gpu_slot(job: Job):
             time.sleep(1.0)
 
 
+def limit_gb(spec):
+    try:
+        return max(0.0, float((spec.get("memory") or {}).get("limit_gb") or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def torch_budget_gb(spec):
+    limit = limit_gb(spec)
+    return max(0.1, limit - CUDA_CONTEXT_GB) if limit > 0 else 0.0
+
+
+def budget_profile(spec, limit):
+    import torch
+    from corridorkey.runtime import select_vram_profile
+
+    quantum = 128
+    h = -(-int(spec["height"]) // quantum) * quantum
+    w = -(-int(spec["width"]) // quantum) * quantum
+    free, _ = torch.cuda.mem_get_info()
+    budget = min(limit, (free + torch.cuda.memory_reserved()) / 2**30)
+    return select_vram_profile((h, w), int(spec["count"]), budget)
+
+
 def make_cfg(spec, work: Path, attempt: int):
     from corridorkey.runtime import InferenceConfig
 
@@ -190,7 +218,12 @@ def make_cfg(spec, work: Path, attempt: int):
         temp_dir=work / "tmp",
     )
     memory = spec.get("memory") or {}
-    if attempt == 0 and memory.get("auto", True):
+    limit = limit_gb(spec)
+    if attempt == 0 and memory.get("auto", True) and limit > 0:
+        cfg.hann_chunk, cfg.hann_stride, cfg.low_vram, estimate = budget_profile(spec, torch_budget_gb(spec))
+        print(f"  VRAM limit {limit:.2f} GB -> hann_chunk={cfg.hann_chunk}, hann_stride={cfg.hann_stride}, "
+              f"low_vram={cfg.low_vram} (estimated peak {estimate:.1f} GB)")
+    elif attempt == 0 and memory.get("auto", True):
         cfg.auto_vram = True
     elif attempt == 0:
         cfg.hann_chunk = int(memory.get("chunk", 8))
@@ -247,7 +280,8 @@ def convert(job: Job, out_dir: Path, clip: str, mapping, done_before: int):
     target.mkdir(exist_ok=True)
     linear = bool(job.spec.get("linear"))
     w, h = int(job.spec["width"]), int(job.spec["height"])
-    for n, (j, i) in enumerate(mapping):
+    def one(pair):
+        j, i = pair
         job.check()
         a = cv2.imread(str(alphas[j]), cv2.IMREAD_UNCHANGED).astype(np.float32)
         a = a if a.ndim == 2 else a[:, :, 0]
@@ -258,13 +292,36 @@ def convert(job: Job, out_dir: Path, clip: str, mapping, done_before: int):
             raise RuntimeError(f"Output size {a.shape[1]}x{a.shape[0]}, expected {w}x{h}.")
         rgba = np.dstack([fg, np.clip(a, 0.0, 1.0)]).astype(np.float16)
         rgba.tofile(target / f"{i:05d}.rgba")
-        job.report(stage="finishing", done=done_before + n + 1)
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for n, _ in enumerate(pool.map(one, mapping)):
+            job.report(stage="finishing", done=done_before + n + 1)
+
+
+def fast_exr_writer():
+    from corridorkey import video_io
+
+    writer = getattr(video_io, "ExrSequenceWriter", None)
+    if writer is None or getattr(writer, "_ck2_fast", False):
+        return
+    original = writer.__init__
+
+    def init(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        params = list(self.imwrite_params)
+        if cv2.IMWRITE_EXR_COMPRESSION in params[::2]:
+            params[params.index(cv2.IMWRITE_EXR_COMPRESSION) + 1] = EXR_COMPRESSION
+        self.imwrite_params = params
+
+    writer.__init__ = init
+    writer._ck2_fast = True
 
 
 def run(job: Job):
     import torch
     from corridorkey.runtime import RuntimePaths, load_model, prepare_runtime_environment
 
+    fast_exr_writer()
     spec = job.spec
     count = int(spec["count"])
     hint = spec.get("hint") or {}
@@ -279,6 +336,10 @@ def run(job: Job):
         try:
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA is not available: CorridorKey 2.0 needs an NVIDIA RTX GPU.")
+            budget = torch_budget_gb(spec)
+            if budget > 0:
+                total = torch.cuda.get_device_properties(0).total_memory
+                torch.cuda.set_per_process_memory_fraction(min(1.0, budget * 2**30 / total))
             job.report(stage="loading", done=0)
             paths = RuntimePaths.from_package(str(CK2))
             paths.validate()
@@ -299,6 +360,7 @@ def run(job: Job):
                     [(k, i) for k, i in enumerate(order) if k > 0]
                 results.append((seq / "out", clip, mapping))
                 offset += len(order)
+            job.log(f"peak GPU memory {torch.cuda.max_memory_reserved() / 2**30:.2f} GB")
             del model
             torch.cuda.empty_cache()
         finally:
@@ -361,8 +423,49 @@ def active_work_area():
     return None
 
 
+def owner_rect(owner):
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        user32.IsWindow.argtypes = [wintypes.HWND]
+        user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        rc = wintypes.RECT()
+        if owner and user32.IsWindow(owner) and user32.GetWindowRect(owner, ctypes.byref(rc)):
+            return rc.left, rc.top, rc.right, rc.bottom
+    except Exception:
+        pass
+    return None
+
+
+def attach_to_owner(hwnd, owner):
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+        dark = ctypes.c_int(1)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), 20, ctypes.byref(dark), 4)
+        if owner:
+            user32.SetWindowLongPtrW(hwnd, -8, owner)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+PANEL, TEXT, MUTED, TROUGH, ACCENT, BUTTON, BUTTON_HOVER = (
+    "#28282e", "#d0d0d4", "#8c8c94", "#18181b", "#e64b3d", "#3a3a41", "#4a4a52")
+
+
 def progress_window(job: Job):
-    area = active_work_area()
+    spec = job.spec
+    owner = int(spec.get("owner") or 0)
+    area = owner_rect(owner)
+    margin = (24, 72) if area else (24, 24)
+    area = area or active_work_area()
     try:
         import tkinter as tk
         from tkinter import ttk
@@ -370,19 +473,35 @@ def progress_window(job: Job):
         root = tk.Tk()
     except Exception:
         return
-    spec = job.spec
     root.title("CorridorKey 2.0")
+    icon = tk.PhotoImage(width=32, height=32)
+    for y in range(32):
+        row = [ACCENT if x + y < 31 else ("#9a9aa2" if (x // 4 + y // 4) % 2 else "#5a5a62") for x in range(32)]
+        icon.put("{" + " ".join(row) + "}", to=(0, y))
+    root.iconphoto(True, icon)
     root.resizable(False, False)
-    root.attributes("-topmost", True)
-    frame = ttk.Frame(root, padding=12)
+    root.configure(bg=PANEL)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("TFrame", background=PANEL)
+    style.configure("TLabel", background=PANEL, foreground=TEXT, font=("Segoe UI", 9))
+    style.configure("Muted.TLabel", foreground=MUTED)
+    style.configure("Horizontal.TProgressbar", troughcolor=TROUGH, background=ACCENT, bordercolor=TROUGH,
+                    lightcolor=ACCENT, darkcolor=ACCENT, thickness=8)
+    style.configure("TButton", background=BUTTON, foreground=TEXT, bordercolor=BUTTON, lightcolor=BUTTON,
+                    darkcolor=BUTTON, focuscolor=BUTTON, font=("Segoe UI", 9), padding=(12, 3))
+    style.map("TButton", background=[("disabled", PANEL), ("active", BUTTON_HOVER)],
+              foreground=[("disabled", MUTED)])
+    frame = ttk.Frame(root, padding=14)
     frame.pack(fill="both", expand=True)
-    ttk.Label(frame, text=f"Keying {spec['count']} frames at {spec['width']}x{spec['height']}").pack(anchor="w")
+    ttk.Label(frame, text=f"Keying {spec['count']} frames at {spec['width']}x{spec['height']}",
+              style="Muted.TLabel").pack(anchor="w")
     label = ttk.Label(frame, text="Starting", width=48)
-    label.pack(anchor="w", pady=(6, 4))
+    label.pack(anchor="w", pady=(4, 6))
     bar = ttk.Progressbar(frame, length=320, maximum=1000, mode="determinate")
     bar.pack(fill="x")
     button = ttk.Button(frame, text="Cancel")
-    button.pack(anchor="e", pady=(8, 0))
+    button.pack(anchor="e", pady=(10, 0))
 
     def cancel():
         (job.folder / "cancel").write_text("1", encoding="utf-8")
@@ -392,9 +511,11 @@ def progress_window(job: Job):
     button.configure(command=cancel)
     root.protocol("WM_DELETE_WINDOW", root.iconify)
     root.update_idletasks()
+    if not attach_to_owner(int(root.wm_frame(), 16), owner):
+        root.attributes("-topmost", True)
     left, top, right, bottom = area or (0, 0, root.winfo_screenwidth(), root.winfo_screenheight() - 48)
-    x = right - root.winfo_width() - 24
-    y = bottom - root.winfo_height() - 24
+    x = right - root.winfo_width() - margin[0]
+    y = bottom - root.winfo_height() - margin[1]
     root.geometry(f"+{x}+{y}")
 
     def tick():
@@ -420,7 +541,7 @@ def progress_window(job: Job):
     finally:
         import gc
 
-        root = frame = label = bar = button = None
+        root = frame = label = bar = button = icon = None
         gc.collect()
 
 

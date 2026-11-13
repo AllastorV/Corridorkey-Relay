@@ -72,7 +72,8 @@ class FakeRuntime:
         rt.run_inference = run_inference
         vio.WriterConfig = lambda: None
         torch = types.ModuleType("torch")
-        torch.cuda = types.SimpleNamespace(is_available=lambda: True, empty_cache=lambda: None)
+        torch.cuda = types.SimpleNamespace(is_available=lambda: True, empty_cache=lambda: None,
+                                           max_memory_reserved=lambda: 0)
         sys.modules.update({"corridorkey": pkg, "corridorkey.runtime": rt, "corridorkey.video_io": vio,
                             "torch": torch})
 
@@ -145,6 +146,38 @@ class PureFunctions(unittest.TestCase):
         self.assertEqual(f({"stage": "keying", "done": 12, "total": 30})[0], "Keying 12/30 frames")
         self.assertEqual(f({"stage": "keying", "done": 99, "total": 0})[1], 0.95)
         self.assertEqual(f({"stage": "error", "error": "Cancelled."}), ("Error: Cancelled.", None))
+
+    def test_limit_gb_parsing(self):
+        f = self.m.limit_gb
+        self.assertEqual(f({}), 0.0)
+        self.assertEqual(f({"memory": {"auto": True}}), 0.0)
+        self.assertEqual(f({"memory": {"limit_gb": 4.5}}), 4.5)
+        self.assertEqual(f({"memory": {"limit_gb": -2}}), 0.0)
+        self.assertEqual(f({"memory": {"limit_gb": "bad"}}), 0.0)
+        self.assertEqual(f({"memory": None}), 0.0)
+        b = self.m.torch_budget_gb
+        self.assertEqual(b({"memory": {"auto": True}}), 0.0)
+        self.assertAlmostEqual(b({"memory": {"limit_gb": 4.0}}), 4.0 - self.m.CUDA_CONTEXT_GB)
+        self.assertEqual(b({"memory": {"limit_gb": 0.2}}), 0.1)
+
+    def test_fast_exr_writer_swaps_compression_only(self):
+        vio = sys.modules["corridorkey.video_io"]
+
+        class Writer:
+            def __init__(self, dtype):
+                self.imwrite_params = [cv2.IMWRITE_EXR_TYPE, dtype,
+                                       cv2.IMWRITE_EXR_COMPRESSION, cv2.IMWRITE_EXR_COMPRESSION_ZIP]
+
+        vio.ExrSequenceWriter = Writer
+        try:
+            self.m.fast_exr_writer()
+            self.m.fast_exr_writer()
+            w = Writer(cv2.IMWRITE_EXR_TYPE_FLOAT)
+            self.assertEqual(w.imwrite_params, [cv2.IMWRITE_EXR_TYPE, cv2.IMWRITE_EXR_TYPE_FLOAT,
+                                                cv2.IMWRITE_EXR_COMPRESSION, cv2.IMWRITE_EXR_COMPRESSION_PIZ])
+        finally:
+            del vio.ExrSequenceWriter
+        self.m.fast_exr_writer()
 
     def test_is_oom_follows_cause_chain_and_survives_cycles(self):
         inner = RuntimeError("CUDA out of memory")
