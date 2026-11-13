@@ -1,5 +1,10 @@
 # CorridorKey Relay
 
+[![Download Setup.exe](https://img.shields.io/badge/Download-Setup.exe-E64B3D?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/AllastorV/corridorkey-relay/releases/latest/download/CorridorKey-Relay-1.0.0-Setup.exe)
+[![Source](https://img.shields.io/badge/Source-GitHub-24292F?style=for-the-badge&logo=github&logoColor=white)](https://github.com/AllastorV/corridorkey-relay)
+[![CorridorKey 2.0](https://img.shields.io/badge/Powered%20by-CorridorKey%202.0-2B2B31?style=for-the-badge)](https://github.com/nikopueringer/CorridorKey2.0)
+[![Licence](https://img.shields.io/badge/Licence-CorridorKey%20(CC%20BY--NC--SA%204.0%20variant)-555?style=for-the-badge)](LICENSE)
+
 A free, unofficial OpenFX plugin that relays your DaVinci Resolve clips to
 [CorridorKey 2.0](https://github.com/nikopueringer/CorridorKey2.0) and brings the keyed result back into
 the Edit, Fusion and Color pages, on Windows.
@@ -79,7 +84,7 @@ Setup EXE: build first, then compile `installer\CorridorKeyRelay.iss` with Inno 
 
 ## Controls
 
-![CorridorKey Relay in the Resolve Inspector](docs/inspector.png)
+<img src="docs/inspector.png" alt="CorridorKey Relay in the Resolve Inspector (Edit page)" width="380"> <img src="docs/panel.png" alt="All CorridorKey Relay controls" width="380">
 
 | Group | Control | When it applies |
 |---|---|---|
