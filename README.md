@@ -83,12 +83,15 @@ cache folder and `job.log` / `python.log` in each job folder help with problems.
 
 ## Licence
 
-The plugin code in this repository is MIT licensed (see `LICENSE`). It is and stays free.
+CorridorKey Relay builds on CorridorKey 2.0, so, as the CorridorKey licence requires for derivative works,
+it is released under the **same CorridorKey licence** (a variation of CC BY-NC-SA 4.0 with additional
+terms), reproduced in full in `LICENSE`. It is free of charge and keeps the CorridorKey name.
 
-CorridorKey 2.0 itself is **not** included and is not covered by the MIT licence. `install_runtime.ps1` downloads it from its own repository; it is
-under the CorridorKey licence (a variation of CC BY-NC-SA 4.0 with additional terms, see its `LICENSE`).
-In short, per its README: output may be used commercially; organisations with more than US $20 million
-annual revenue must buy a seat of the official plugin per user. The foundation models it downloads have
+CorridorKey 2.0 itself is not included; `install_runtime.ps1` downloads it from its own repository. In short,
+per the licence: what you key may be used commercially; this plugin may not be sold, repackaged or offered
+as a paid service; anything you release that builds on it must stay free, under this licence and keep the
+CorridorKey name; organisations with more than US $20 million annual revenue must buy a seat of the
+official CorridorKey plugin for each user ([corridorkey.com](https://corridorkey.com)). The foundation models it downloads have
 their own licences (C-RADIOv4: NVIDIA Open Model License, MoGe: MIT, RVM: Apache 2.0 / CC-BY 4.0). See
 `THIRD_PARTY.md`.
 
